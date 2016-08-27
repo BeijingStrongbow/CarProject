@@ -5,123 +5,152 @@
 
 Adafruit_MotorShield shield = Adafruit_MotorShield();
 Servo s;
-Adafruit_DCMotor *m = shield.getMotor(1);
-int steering = 1; //0 = left, 1 = straight. 2 = right;
-bool driving = false;
 
+int dcDirPin = 13;
+int dcPwmPin = 11;
+int forwardPin = 2;
+int backwardPin = 4;
+int leftPin = 6;
+int rightPin = 9;
+
+int driving = 0; //0 = stationary 1 = turning left 2 = forwards 3 = turning right 4 = backwards
 void setup() {
+  Serial.begin(9600);
   shield.begin();
   s.attach(10);
   s.write(69);
-  pinMode(0, INPUT); //forward
-  pinMode(1, INPUT); //backward
-  pinMode(2, INPUT); //left
-  pinMode(3, INPUT); //right
+  pinMode(dcDirPin, OUTPUT);
+  pinMode(dcPwmPin, OUTPUT);
+  pinMode(forwardPin, INPUT);
+  pinMode(backwardPin, INPUT);
+  pinMode(leftPin, INPUT);
+  pinMode(rightPin, INPUT);
+
 }
 
 void loop() {
-  //FORWARD
-  if(digitalRead(0) == 1 && !driving){
-    accelerate(true);
-  }
+  Serial.print(digitalRead(forwardPin));
   
-  //BACKWARD
-  else if(digitalRead(1) == 1 && !driving){
-    accelerate(false);
-  }
-  
-  //LEFT
-  else if(digitalRead(2) == 1 && !driving){
-    steer(0);
-    if(digitalRead(2) == 1){
-      accelerate(true);
+  if(digitalRead(forwardPin) == 1 && 
+    digitalRead(backwardPin) == 0 && 
+    digitalRead(leftPin) == 0 && 
+    digitalRead(rightPin) == 0 && 
+    driving != 2){
+    
+    if(driving != 0){
+      decelerate(200);
     }
-    else{
-      steer(1);
-    }
-  }
-  
-  //RIGHT
-  else if(digitalRead(3) == 1 && !driving){
-    steer(2);
-    if(digitalRead(3) == 1){
-      accelerate(true);
-    }
-    else{
-      steer(1);
+    
+    drive(1, true);
+    if(digitalRead(forwardPin) == 1){
+      driving = 2;
+      accelerate(220);
     }
   }
-
-  else if(digitalRead(0) == 0 &&
-          digitalRead(1) == 0 &&
-          digitalRead(2) == 0 &&
-          digitalRead(3) == 0 && 
-          driving){
-    decelerate();
-    steer(1);
+  else if(digitalRead(forwardPin) == 0 && 
+    digitalRead(backwardPin) == 1 && 
+    digitalRead(leftPin) == 0 && 
+    digitalRead(rightPin) == 0 && 
+    driving != 4){
+    
+    if(driving != 0){
+      decelerate(200);
+    }
+    
+    drive(1, false);
+    if(digitalRead(backwardPin) == 1){
+      driving = 4;
+      accelerate(200);  
+    }
+  }
+  else if(digitalRead(forwardPin) == 0 && 
+    digitalRead(backwardPin) == 0 && 
+    digitalRead(leftPin) == 1 && 
+    digitalRead(rightPin) == 0 && 
+    driving != 1){
+    
+    if(driving != 0){
+      decelerate(200);
+    }
+    
+    drive(0, true);
+    if(digitalRead(leftPin) == 1){
+      driving = 1;
+      accelerate(220);  
+    }
+  }
+  else if(digitalRead(forwardPin) == 0 && 
+    digitalRead(backwardPin) == 0 && 
+    digitalRead(leftPin) == 0 && 
+    digitalRead(rightPin) == 1 && 
+    driving != 3){
+    
+    if(driving != 0){
+      decelerate(200);
+    }
+    
+    drive(2, true);
+    if(digitalRead(rightPin) == 1){
+      driving = 3;
+      accelerate(220);  
+    }
+  }
+  if(digitalRead(forwardPin) == 0 && 
+     digitalRead(backwardPin) == 0 &&
+     digitalRead(leftPin) == 0 &&
+     digitalRead(rightPin) == 0 && 
+     driving != 0){
+    driving = 0;
+    decelerate(215);      
   }
 }
 
-void accelerate(bool forward){
-  driving = true;
-  for(int i = 0; i <= 255; i++){
-    m->setSpeed(i);
-    if(forward){
-      m->run(FORWARD);
-      if(digitalRead(0) == 0){
-        driving = false;
-        for(int j = i; j >= 0; j--){
-          m->setSpeed(j);
-        }
-        break;
-      }
-    }
-    else{
-      m->run(BACKWARD);
-      if(digitalRead(1) == 0){
-        driving = false;
-        for(int j = i; j >= 0; j--){
-          m -> setSpeed(j);
-        }
-        break;
-      }
-    }
-    delay(4);
-  }
-}
+bool drive(int turn, bool forward){
+  if(turn == 0 && abs(s.read() - 40) > 3){
+    s.write(40);
 
-void decelerate(){
-  for(int i = 254; i >= 0; i--){
-    m->setSpeed(i); 
+    delay(2000);
   }
-  driving = false;
-}
-
-void steer(int direction){
-  if(direction == 0 && steering != 0){
-    s.write(43);
-    steering = 0;
-    if(steering == 1){
-      delay(500);
-    }
-    else{
-      delay(1000);
-    }
-  }
-  else if(direction == 1 && steering != 1){
+  else if(turn == 1 && abs(s.read() - 71) > 3){
     s.write(69);
-    steering = 1;
-    delay(500);
+
+    delay(2000);
   }
-  else if(direction == 2 && steering != 2){
+  else if(turn == 2 && abs(s.read() - 95) > 3){
     s.write(95);
-    steering = 2;
-    if(steering == 1){
-      delay(500);
-    }
-    else{
-      delay(1000);
-    }
+
+    delay(2000);
   }
-  
+
+  if(forward){
+    digitalWrite(dcDirPin, LOW);
+  }
+  else{
+    digitalWrite(dcDirPin, HIGH);
+  }
 }
+
+void accelerate(int finalSpeed){
+  for(int i = 0; i <= finalSpeed; i++){
+    analogWrite(dcPwmPin, i);
+
+    if(digitalRead(forwardPin) == 0 && 
+     digitalRead(backwardPin) == 0 &&
+     digitalRead(leftPin) == 0 &&
+     digitalRead(rightPin) == 0){
+      decelerate(i);
+      break;
+    }
+    delay(15);
+  }
+}
+
+void decelerate(int startSpeed){
+  driving = false;
+  for(int i = startSpeed - 1; i >= 0; i--){
+    analogWrite(dcPwmPin, i);
+    
+    delay(3);
+  }
+}
+
